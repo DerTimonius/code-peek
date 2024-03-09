@@ -1,6 +1,6 @@
 use clap::{arg, command};
-use std::{env, ffi::OsString, fs, path::Path};
-use walkdir::WalkDir;
+use ignore::{DirEntry, WalkBuilder};
+use std::{env, ffi::OsString, fs};
 
 #[derive(Debug, Clone)]
 struct File {
@@ -33,8 +33,18 @@ fn main() {
     };
 
     let group = matches.get_one::<bool>("group").unwrap();
-    let gitignore_files = get_ignored_files(dir);
-    let files = get_files(dir, &gitignore_files);
+    let mut files: Vec<File> = Vec::new();
+
+    for result in WalkBuilder::new(dir).hidden(false).build() {
+        match result {
+            Ok(entry) => {
+                if let Some(file) = get_file_info(&entry, dir) {
+                    files.push(file)
+                }
+            }
+            Err(err) => println!("ERROR: {}", err),
+        }
+    }
 
     if *group {
         grouped_info(&files)
@@ -43,83 +53,44 @@ fn main() {
     }
 }
 
-fn get_files(dir: &str, gitignore_files: &Vec<String>) -> Vec<File> {
-    let mut files: Vec<File> = Vec::new();
+fn get_file_info(entry: &DirEntry, dir: &str) -> Option<File> {
+    let entry = entry.clone();
+    let path = entry
+        .path()
+        .strip_prefix(dir)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let file_name = entry.file_name().to_str().unwrap().to_string();
+    let extension = match entry.path().extension() {
+        Some(ext) => ext.to_owned(),
+        None => OsString::from("config"),
+    };
 
-    for entry in WalkDir::new(dir) {
-        let entry = entry.unwrap().clone();
-        let path = entry.path().to_str().unwrap().to_string();
-        let file_name = entry.file_name().to_str().unwrap().to_string();
-        let extension = match entry.path().extension() {
-            Some(ext) => ext.to_owned(),
-            None => OsString::from("config"),
-        };
-
-        if gitignore_files.iter().any(|e| path.contains(e)) {
-            continue;
-        }
-
-        if entry.path().is_file() && fs::read_to_string(entry.path()).is_ok() {
-            let lines = fs::read_to_string(entry.path()).unwrap().lines().count() as usize;
-            files.push(File {
-                name: file_name,
-                path: path.replace(dir, ""),
-                extension,
-                loc: lines,
-            });
-        }
+    if fs::read_to_string(entry.path()).is_ok() {
+        let lines = fs::read_to_string(entry.path()).unwrap().lines().count() as usize;
+        return Some(File {
+            name: file_name,
+            path,
+            extension,
+            loc: lines,
+        });
     }
 
-    files
+    None
 }
 
 fn grouped_info(files: &Vec<File>) {
     todo!()
 }
 
-fn get_ignored_files(dir: &str) -> Vec<String> {
-    let gitignore_path = Path::new(dir).join(".gitignore");
-    let mut gitignore_files: Vec<String> = if gitignore_path.exists() {
-        fs::read_to_string(gitignore_path)
-            .unwrap()
-            .lines()
-            .filter_map(|s| {
-                let s = s.to_string();
-
-                if s.starts_with("#") || s.is_empty() {
-                    return None;
-                }
-
-                let s = s.replace("*", "").to_string();
-                Some(s)
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-
-    gitignore_files.push(".git".to_string());
-
-    gitignore_files
-}
-
 fn simple_info(files: &Vec<File>, num: usize) {
-    // println!("files: {:?}", files);
-    // println!("number of files: {}", files.len());
-    // println!(
-    //     "number of config files: {}",
-    //     files
-    //         .iter()
-    //         .filter(|x| x.extension == "config")
-    //         .collect::<Vec<_>>()
-    //         .len()
-    // );
-
     let mut sorted_files: Vec<File> = files.clone().to_vec();
     sorted_files.sort_by(|a, b| b.loc.cmp(&a.loc));
 
     let largest_files = sorted_files.into_iter().take(num).collect::<Vec<_>>();
     for file in largest_files {
-        println!("{}: {}", file.name, file.loc);
+        println!("{}: {}", file.path, file.loc);
     }
 }
