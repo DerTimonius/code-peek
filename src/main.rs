@@ -1,4 +1,4 @@
-use clap::{arg, command};
+use clap::{arg, command, crate_version};
 use ignore::{DirEntry, WalkBuilder};
 use std::{collections::HashMap, env, ffi::OsString, fs};
 
@@ -53,11 +53,11 @@ fn main() {
     let cwd = env::current_dir().unwrap();
     let default_dir = cwd.to_str().unwrap();
 
-    let matches = command!("loc-test") // come up with better name
-        .version("1.0")
-        .about("Gain insights from a directory")
-        .arg(arg!([directory] "Directory to search"))
-        .arg(arg!([num]  "Number of files to display"))
+    let matches = command!("code-peek") // come up with better name
+        .version(crate_version!())
+        .about("A CLI tool to peek into codebases and gather insights")
+        .arg(arg!([directory] "Directory to search, defauls to cwd"))
+        .arg(arg!([num]  "Number of files to display, defauls to 10"))
         .arg(arg!([group] -g --group "Group the results by its extension"))
         .get_matches();
 
@@ -143,11 +143,11 @@ fn grouped_info(files: &Vec<File>) {
             "Total lines of code: {}\n",
             val.iter().map(|x| x.loc).sum::<usize>()
         );
-        println!("Top 5 files\n");
+        println!("Top 10 files\n");
         let mut sorted_files: Vec<File> = val.clone().to_vec();
         sorted_files.sort_by(|a, b| b.loc.cmp(&a.loc));
 
-        let largest_files = sorted_files.into_iter().take(5).collect::<Vec<_>>();
+        let largest_files = sorted_files.into_iter().take(10).collect::<Vec<_>>();
         for file in largest_files {
             println!("{}: {}", file.path, file.loc);
         }
