@@ -1,6 +1,19 @@
 use clap::{arg, command, crate_version};
-use ignore::{DirEntry, WalkBuilder};
-use std::{collections::HashMap, env, ffi::OsString, fs};
+use ignore::{overrides::OverrideBuilder, DirEntry, WalkBuilder};
+use std::{
+    collections::HashMap,
+    env,
+    ffi::OsString,
+    fmt::{self, Display},
+    fs,
+    process::Command,
+};
+use term_table::{
+    row::{self, Row},
+    table_cell::{Alignment, TableCell},
+    TableBuilder,
+};
+use term_table::{Table, TableStyle};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 enum FileType {
@@ -24,6 +37,7 @@ struct File {
     path: String,
     loc: usize,
     extension: OsString,
+    commits: Option<usize>,
 }
 
 impl File {
@@ -49,16 +63,36 @@ impl File {
     }
 }
 
+impl Display for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 fn main() {
     let cwd = env::current_dir().unwrap();
     let default_dir = cwd.to_str().unwrap();
 
-    let matches = command!("code-peek") // come up with better name
+    let matches = command!("code-peek")
+        .name("Code Peek")
         .version(crate_version!())
         .about("A CLI tool to peek into codebases and gather insights")
-        .arg(arg!([directory] "Directory to search, defauls to cwd"))
-        .arg(arg!([num]  "Number of files to display, defauls to 10"))
-        .arg(arg!([group] -g --group "Group the results by its extension"))
+        .arg(arg!([directory] "Directory to search, defauls to cwd").required(false))
+        .arg(arg!([num]  "Number of files to display, defauls to 10").required(false))
+        .arg(arg!([group] -g --group "Group the results by its extension").required(false))
+        .arg(arg!([git] -gi --git "Get git info - how many commits were made to each file").required(false))
+        .arg(
+            arg!([exclude]
+                -e --exclude [GLOB] ... "Globs to exclude other than the files in the .gitignore, expects a comma separated list. E.g. '*.txt,*.csv'"
+            )
+            .required(false),
+        )
+        // .arg(
+        //     arg!([include]
+        //         -i --include [GLOB] ... "Globs to include, expects a comma separated list. E.g. '*.txt,*.csv'"
+        //     )
+        //     .required(false),
+        // )
         .get_matches();
 
     let dir = match matches.get_one::<String>("directory") {
@@ -72,9 +106,37 @@ fn main() {
     };
 
     let group = matches.get_one::<bool>("group").unwrap();
+    let git = matches.get_one::<bool>("git").unwrap();
+
+    let excludes = if let Some(globs) = matches.get_one::<String>("exclude") {
+        globs.split(",").collect::<Vec<&str>>()
+    } else {
+        Vec::new()
+    };
+
+    // let includes = if let Some(globs) = matches.get_one::<String>("include") {
+    //     globs.split(",").collect::<Vec<&str>>()
+    // } else {
+    //     Vec::new()
+    // };
+
+    let mut builder = OverrideBuilder::new(dir);
+    for glob in excludes.iter() {
+        let glob = format!("!{glob}"); // add ! to the front to exclude the glob
+        builder.add(glob.as_str()).unwrap();
+    }
+    // for glob in includes.iter() {
+    //     builder.add(glob).unwrap();
+    // }
+    let overrides = builder.build().unwrap();
+
     let mut files: Vec<File> = Vec::new();
 
-    for result in WalkBuilder::new(dir).hidden(false).build() {
+    for result in WalkBuilder::new(dir)
+        .overrides(overrides)
+        .hidden(false)
+        .build()
+    {
         match result {
             Ok(entry) => {
                 if entry.path().to_str().unwrap().contains(".git/") {
@@ -88,11 +150,26 @@ fn main() {
         }
     }
 
+    println!("Summary for project {dir}\n");
+    println!("Total number of files: {}\n", files.len());
+    println!(
+        "Total lines of code: {}\n",
+        files.iter().map(|x| x.loc).sum::<usize>()
+    );
+
+    if *git {
+        add_git_info(&files)
+    }
+
     if *group {
         grouped_info(&files)
     } else {
         simple_info(&files, num)
     }
+}
+
+fn add_git_info(files: &Vec<File>) {
+    todo!()
 }
 
 fn get_file_info(entry: &DirEntry, dir: &str) -> Option<File> {
@@ -117,6 +194,7 @@ fn get_file_info(entry: &DirEntry, dir: &str) -> Option<File> {
             path,
             extension,
             loc: lines,
+            commits: None,
         });
     }
 
@@ -138,6 +216,13 @@ fn grouped_info(files: &Vec<File>) {
     sorted_entries.sort_by(|(_, files1), (_, files2)| files2.len().cmp(&files1.len()));
 
     for (key, val) in sorted_entries.iter() {
+        let mut table = TableBuilder::new()
+            // .style(TableStyle::simple())
+            .has_top_boarder(true)
+            .style(TableStyle::elegant())
+            .build();
+        table.add_row(Row::new(vec![key.to_string(), "Lines of Code".to_string()]));
+        // table.add_row(Row::new(vec![]));
         println!("Number of {:?} files: {} \n", key, val.len());
         println!(
             "Total lines of code: {}\n",
@@ -149,10 +234,11 @@ fn grouped_info(files: &Vec<File>) {
 
         let largest_files = sorted_files.into_iter().take(10).collect::<Vec<_>>();
         for file in largest_files {
-            println!("{}: {}", file.path, file.loc);
+            // println!("{}: {}", file.path, file.loc);
+            table.add_row(Row::new(vec![file.path, file.loc.to_string()]));
         }
 
-        println!("\n==============");
+        println!("{}", table.render());
     }
 }
 
