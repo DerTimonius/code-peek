@@ -1,5 +1,12 @@
 use clap::{arg, command, crate_version};
 use ignore::{overrides::OverrideBuilder, DirEntry, WalkBuilder};
+use nom::{
+    bytes::complete::take_till,
+    character::complete::{self, line_ending, multispace0, multispace1, not_line_ending},
+    multi::separated_list1,
+    sequence::{preceded, separated_pair},
+    IResult,
+};
 use std::{
     collections::HashMap,
     env,
@@ -8,12 +15,7 @@ use std::{
     fs,
     process::Command,
 };
-use term_table::{
-    row::{self, Row},
-    table_cell::{Alignment, TableCell},
-    TableBuilder,
-};
-use term_table::{Table, TableStyle};
+use term_table::{row::Row, TableBuilder, TableStyle};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 enum FileType {
@@ -41,7 +43,7 @@ struct File {
 }
 
 impl File {
-    fn get_file_type(self) -> FileType {
+    fn get_file_type(&self) -> FileType {
         if self.name.ends_with("svelte.ts") || self.name.ends_with("svelte.js") {
             return FileType::Svelte;
         }
@@ -60,6 +62,10 @@ impl File {
             Some("go") => FileType::Go,
             _ => FileType::Other,
         }
+    }
+
+    fn add_commits(&mut self, commits: usize) {
+        self.commits = Some(commits)
     }
 }
 
@@ -80,7 +86,7 @@ fn main() {
         .arg(arg!([directory] "Directory to search, defauls to cwd").required(false))
         .arg(arg!([num]  "Number of files to display, defauls to 10").required(false))
         .arg(arg!([group] -g --group "Group the results by its extension").required(false))
-        .arg(arg!([git] -gi --git "Get git info - how many commits were made to each file").required(false))
+        .arg(arg!([git] -t --git "Get git info - how many commits were made to each file").required(false))
         .arg(
             arg!([exclude]
                 -e --exclude [GLOB] ... "Globs to exclude other than the files in the .gitignore, expects a comma separated list. E.g. '*.txt,*.csv'"
@@ -158,18 +164,130 @@ fn main() {
     );
 
     if *git {
-        add_git_info(&files)
+        add_git_info(&mut files, dir)
     }
 
     if *group {
-        grouped_info(&files)
+        grouped_info(&files, *git)
     } else {
         simple_info(&files, num)
     }
+
+    display_git_info(&files, num)
 }
 
-fn add_git_info(files: &Vec<File>) {
-    todo!()
+fn display_git_info(files: &Vec<File>, num: usize) {
+    println!("\n===============\n");
+    println!("Most changed files");
+    let mut sorted_files: Vec<File> = files.clone().to_vec();
+    sorted_files.sort_by(|a, b| b.commits.unwrap_or(1).cmp(&a.commits.unwrap_or(1)));
+
+    let largest_files = sorted_files.into_iter().take(num).collect::<Vec<_>>();
+    for file in largest_files {
+        println!("\n{}: {} commits", file.path, file.commits.unwrap_or(1));
+    }
+}
+
+fn add_git_info(files: &mut Vec<File>, dir: &str) {
+    let commit_output = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args([
+                "/C",
+                "git log --pretty=format: --name-only | sort | uniq -c",
+            ])
+            .current_dir(dir)
+            .output()
+            .expect("failed to execute process")
+    } else {
+        Command::new("sh")
+            .arg("-c")
+            .arg("git log --pretty=format: --name-only | sort | uniq -c")
+            .current_dir(dir)
+            .output()
+            .expect("failed to execute process")
+    };
+
+    if commit_output.status.success() {
+        let output_str = String::from_utf8_lossy(&commit_output.stdout);
+        let (_, file_map) = parse_git_commits(&output_str).expect("should parse commits");
+
+        for file in files.iter_mut() {
+            let commits = match file_map.get(file.path.as_str()) {
+                Some(x) => *x as usize,
+                _ => 1,
+            };
+            file.add_commits(commits)
+        }
+    }
+
+    let author_output = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["/C", "git log --format='%aN' | sort | uniq -c | sort -nr"])
+            .current_dir(dir)
+            .output()
+            .expect("failed to execute process")
+    } else {
+        Command::new("sh")
+            .arg("-c")
+            .arg("git log --format='%aN' | sort | uniq -c | sort -nr")
+            .current_dir(dir)
+            .output()
+            .expect("failed to execute process")
+    };
+
+    if author_output.status.success() {
+        let output_str = String::from_utf8_lossy(&author_output.stdout);
+        let (_, authors) = parse_git_authors(&output_str).expect("should parse authors");
+
+        println!("Most prolific contributors!\n");
+        for (commits, name) in authors.iter().take(10) {
+            println!("{name} contributed with {commits} commits")
+        }
+    }
+}
+
+fn parse_git_authors(input: &str) -> IResult<&str, Vec<(u32, &str)>> {
+    let (input, authors) = separated_list1(
+        line_ending,
+        separated_pair(
+            preceded(multispace0, complete::u32),
+            multispace1,
+            not_line_ending,
+        ),
+    )(input)?;
+
+    Ok((input, authors))
+}
+
+fn parse_git_commits(input: &str) -> IResult<&str, HashMap<&str, u32>> {
+    let (input, commits) = take_till(|x| x == '\n')(input)?;
+
+    let commits = commits
+        .trim()
+        .parse::<usize>()
+        .expect("should be a valid integer");
+
+    println!("Total number of commits: {:?}", commits);
+
+    let (input, file_info) = preceded(
+        line_ending,
+        separated_list1(
+            line_ending,
+            separated_pair(
+                preceded(multispace0, complete::u32),
+                multispace1,
+                not_line_ending,
+            ),
+        ),
+    )(input)?;
+
+    let mut file_map: HashMap<&str, u32> = HashMap::new();
+
+    for (num, name) in file_info.iter() {
+        file_map.insert(name.trim(), *num);
+    }
+
+    Ok((input, file_map))
 }
 
 fn get_file_info(entry: &DirEntry, dir: &str) -> Option<File> {
@@ -201,7 +319,7 @@ fn get_file_info(entry: &DirEntry, dir: &str) -> Option<File> {
     None
 }
 
-fn grouped_info(files: &Vec<File>) {
+fn grouped_info(files: &Vec<File>, git: bool) {
     let mut grouped_files: HashMap<FileType, Vec<File>> = HashMap::new();
 
     for file in files.iter() {
@@ -221,24 +339,38 @@ fn grouped_info(files: &Vec<File>) {
             .has_top_boarder(true)
             .style(TableStyle::elegant())
             .build();
-        table.add_row(Row::new(vec![key.to_string(), "Lines of Code".to_string()]));
+        if git {
+            table.add_row(Row::new(vec![
+                key.to_string(),
+                "Lines of Code".to_string(),
+                "Associated commits".to_string(),
+            ]));
+        } else {
+            table.add_row(Row::new(vec![key.to_string(), "Lines of Code".to_string()]));
+        }
         // table.add_row(Row::new(vec![]));
-        println!("Number of {:?} files: {} \n", key, val.len());
-        println!(
-            "Total lines of code: {}\n",
-            val.iter().map(|x| x.loc).sum::<usize>()
-        );
-        println!("Top 10 files\n");
         let mut sorted_files: Vec<File> = val.clone().to_vec();
         sorted_files.sort_by(|a, b| b.loc.cmp(&a.loc));
 
         let largest_files = sorted_files.into_iter().take(10).collect::<Vec<_>>();
         for file in largest_files {
-            // println!("{}: {}", file.path, file.loc);
-            table.add_row(Row::new(vec![file.path, file.loc.to_string()]));
+            if git {
+                table.add_row(Row::new(vec![
+                    file.path,
+                    file.loc.to_string(),
+                    file.commits.unwrap_or(1).to_string(),
+                ]));
+            } else {
+                table.add_row(Row::new(vec![file.path, file.loc.to_string()]));
+            }
         }
 
         println!("{}", table.render());
+        println!("Number of {:?} files: {} \n", key, val.len());
+        println!(
+            "Total lines of code: {}\n",
+            val.iter().map(|x| x.loc).sum::<usize>()
+        );
     }
 }
 
@@ -248,6 +380,6 @@ fn simple_info(files: &Vec<File>, num: usize) {
 
     let largest_files = sorted_files.into_iter().take(num).collect::<Vec<_>>();
     for file in largest_files {
-        println!("{}: {}", file.path, file.loc);
+        println!("\n{}: {}", file.path, file.loc);
     }
 }
