@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::collections::HashMap;
 use term_table::{row::Row, Table, TableBuilder, TableStyle};
 
@@ -14,56 +15,17 @@ pub fn display_info(
     total_commits: Option<usize>,
     num: usize,
 ) {
-    println!("Summary for project {}\n", dir);
-    println!("Total number of files: {}\n", files.len());
     println!(
-        "Total lines of code: {}\n",
+        "\n{} {}\n",
+        "Summary for project".red().bold(),
+        dir.red().bold()
+    );
+    println!("{} {}\n", "Total number of files:".blue(), files.len());
+    println!(
+        "{} {}\n",
+        "Total lines of code:".blue(),
         files.iter().map(|x| x.loc).sum::<usize>()
     );
-
-    if options.git || options.all {
-        display_git_info(files, num, dir, total_commits.unwrap_or(0))
-    }
-
-    if options.group || options.all {
-        grouped_info(files, options.git || options.all)
-    } else {
-        simple_info(files, num)
-    }
-}
-
-fn display_git_info(files: &Vec<File>, num: usize, dir: &str, total_commits: usize) {
-    println!("Information retrieved from the git log");
-    println!("\n===============\n");
-
-    println!("Total number of commits: {total_commits}\n");
-
-    let authors = get_git_authors(dir, num).unwrap_or(vec![]);
-
-    if !authors.is_empty() {
-        println!("Most prolific contributors\n");
-
-        for author in authors.iter().take(num) {
-            let name = author.name.clone();
-            let commits = author.commits;
-
-            println!("{name} contributed with {commits} commits")
-        }
-    }
-    println!("\n===============\n");
-    println!("Most changed files");
-    let mut sorted_files: Vec<File> = files.clone().to_vec();
-    sorted_files.sort_by(|a, b| b.commits.unwrap_or(1).cmp(&a.commits.unwrap_or(1)));
-
-    let largest_files = sorted_files.into_iter().take(num).collect::<Vec<_>>();
-    for file in largest_files {
-        println!("\n{}: {} commits", file.path, file.commits.unwrap_or(1));
-    }
-}
-
-fn grouped_info(files: &Vec<File>, git: bool) {
-    println!("\n===============\n");
-    println!("Grouped information about the files\n");
 
     let mut grouped_files: HashMap<FileType, Vec<File>> = HashMap::new();
 
@@ -74,6 +36,65 @@ fn grouped_info(files: &Vec<File>, git: bool) {
             grouped_files.insert(file.clone().get_file_type(), vec![file.clone()]);
         }
     }
+    println!(
+        "{} {}\n",
+        "Number of languages used:".blue(),
+        grouped_files.len()
+    );
+
+    if options.group || options.all {
+        grouped_info(&grouped_files, options.git || options.all);
+        if options.git || options.all {
+            display_git_info(files, num, dir, total_commits.unwrap_or(0))
+        }
+    } else {
+        simple_info(files, num)
+    }
+}
+
+fn display_git_info(files: &Vec<File>, num: usize, dir: &str, total_commits: usize) {
+    println!("\n===================================\n");
+    println!(
+        "\n{}",
+        "Information retrieved from the git log".yellow().bold()
+    );
+
+    println!("{} {total_commits}\n", "Total number of commits:".yellow());
+
+    let authors = get_git_authors(dir, num).unwrap_or(vec![]);
+
+    if !authors.is_empty() {
+        println!("-----------------------------------\n");
+        println!("{}\n", "Most prolific contributors".yellow());
+
+        for author in authors.iter().take(num) {
+            let name = author.name.clone();
+            let commits = author.commits;
+
+            println!(
+                "{} contributed with {} commits",
+                name.bright_cyan().bold(),
+                commits.to_string().bright_cyan()
+            )
+        }
+    }
+    println!("\n-----------------------------------\n");
+    println!("{}", "Most changed files based on commits".yellow());
+    let mut sorted_files: Vec<File> = files.clone().to_vec();
+    sorted_files.sort_by(|a, b| b.commits.unwrap_or(1).cmp(&a.commits.unwrap_or(1)));
+
+    let largest_files = sorted_files.into_iter().take(num).collect::<Vec<_>>();
+    for file in largest_files {
+        println!("\n{}: {} commits", file.path, file.commits.unwrap_or(1));
+    }
+}
+
+fn grouped_info(grouped_files: &HashMap<FileType, Vec<File>>, git: bool) {
+    println!("\n===================================\n");
+    println!(
+        "{}\n",
+        "Grouped information about the files".bright_purple().bold()
+    );
 
     let mut sorted_entries: Vec<_> = grouped_files.into_iter().collect();
     sorted_entries.sort_by(|(_, files1), (_, files2)| files2.len().cmp(&files1.len()));
@@ -83,9 +104,9 @@ fn grouped_info(files: &Vec<File>, git: bool) {
         .style(TableStyle::thin())
         .build();
     file_type_table.add_row(Row::new(vec![
-        "File type".to_string(),
-        "Number of files".to_string(),
-        "Lines of Code".to_string(),
+        "File type".to_string().bright_red().bold(),
+        "Number of files".to_string().bright_red().bold(),
+        "Lines of Code".to_string().bright_red().bold(),
     ]));
 
     let mut tables: Vec<Table> = Vec::new();
@@ -104,14 +125,17 @@ fn grouped_info(files: &Vec<File>, git: bool) {
             .build();
         if git {
             table.add_row(Row::new(vec![
-                key.to_string(),
-                "Lines of Code".to_string(),
-                "Associated commits".to_string(),
+                key.to_string().bright_red().bold(),
+                "Lines of Code".to_string().bright_red().bold(),
+                "Associated commits".to_string().bright_red().bold(),
             ]));
         } else {
-            table.add_row(Row::new(vec![key.to_string(), "Lines of Code".to_string()]));
+            table.add_row(Row::new(vec![
+                key.to_string().bright_red().bold(),
+                "Lines of Code".to_string().bright_red().bold(),
+            ]));
         }
-        let mut sorted_files: Vec<File> = val.clone().to_vec();
+        let mut sorted_files: Vec<File> = val.to_vec();
         sorted_files.sort_by(|a, b| b.loc.cmp(&a.loc));
 
         let largest_files = sorted_files.into_iter().take(10).collect::<Vec<_>>();
@@ -138,6 +162,11 @@ fn grouped_info(files: &Vec<File>, git: bool) {
 }
 
 fn simple_info(files: &Vec<File>, num: usize) {
+    println!("\n===================================\n");
+    println!(
+        "{}\n",
+        "Largest files in your project".bright_green().bold()
+    );
     let mut sorted_files: Vec<File> = files.clone().to_vec();
     sorted_files.sort_by(|a, b| b.loc.cmp(&a.loc));
 
