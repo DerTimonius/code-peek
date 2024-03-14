@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use term_table::{row::Row, TableBuilder, TableStyle};
+use term_table::{row::Row, Table, TableBuilder, TableStyle};
 
 use crate::{
     cli::DisplayOptions,
@@ -21,12 +21,12 @@ pub fn display_info(
         files.iter().map(|x| x.loc).sum::<usize>()
     );
 
-    if options.git {
+    if options.git || options.all {
         display_git_info(files, num, dir, total_commits.unwrap_or(0))
     }
 
-    if options.group {
-        grouped_info(files, options.git)
+    if options.group || options.all {
+        grouped_info(files, options.git || options.all)
     } else {
         simple_info(files, num)
     }
@@ -36,12 +36,12 @@ fn display_git_info(files: &Vec<File>, num: usize, dir: &str, total_commits: usi
     println!("Information retrieved from the git log");
     println!("\n===============\n");
 
-    println!("Total number of commits: {total_commits}");
+    println!("Total number of commits: {total_commits}\n");
 
     let authors = get_git_authors(dir, num).unwrap_or(vec![]);
 
     if !authors.is_empty() {
-        println!("Most prolific contributors");
+        println!("Most prolific contributors\n");
 
         for author in authors.iter().take(num) {
             let name = author.name.clone();
@@ -50,6 +50,7 @@ fn display_git_info(files: &Vec<File>, num: usize, dir: &str, total_commits: usi
             println!("{name} contributed with {commits} commits")
         }
     }
+    println!("\n===============\n");
     println!("Most changed files");
     let mut sorted_files: Vec<File> = files.clone().to_vec();
     sorted_files.sort_by(|a, b| b.commits.unwrap_or(1).cmp(&a.commits.unwrap_or(1)));
@@ -61,6 +62,9 @@ fn display_git_info(files: &Vec<File>, num: usize, dir: &str, total_commits: usi
 }
 
 fn grouped_info(files: &Vec<File>, git: bool) {
+    println!("\n===============\n");
+    println!("Grouped information about the files\n");
+
     let mut grouped_files: HashMap<FileType, Vec<File>> = HashMap::new();
 
     for file in files.iter() {
@@ -74,11 +78,29 @@ fn grouped_info(files: &Vec<File>, git: bool) {
     let mut sorted_entries: Vec<_> = grouped_files.into_iter().collect();
     sorted_entries.sort_by(|(_, files1), (_, files2)| files2.len().cmp(&files1.len()));
 
+    let mut file_type_table = TableBuilder::new()
+        .has_top_boarder(true)
+        .style(TableStyle::thin())
+        .build();
+    file_type_table.add_row(Row::new(vec![
+        "File type".to_string(),
+        "Number of files".to_string(),
+        "Lines of Code".to_string(),
+    ]));
+
+    let mut tables: Vec<Table> = Vec::new();
+
     for (key, val) in sorted_entries.iter() {
+        let total_lines_of_code = val.iter().map(|x| x.loc).sum::<usize>();
+        let number_of_files = val.len();
+        file_type_table.add_row(Row::new(vec![
+            key.to_string(),
+            number_of_files.to_string(),
+            total_lines_of_code.to_string(),
+        ]));
         let mut table = TableBuilder::new()
-            // .style(TableStyle::simple())
             .has_top_boarder(true)
-            .style(TableStyle::elegant())
+            .style(TableStyle::thin())
             .build();
         if git {
             table.add_row(Row::new(vec![
@@ -89,7 +111,6 @@ fn grouped_info(files: &Vec<File>, git: bool) {
         } else {
             table.add_row(Row::new(vec![key.to_string(), "Lines of Code".to_string()]));
         }
-        // table.add_row(Row::new(vec![]));
         let mut sorted_files: Vec<File> = val.clone().to_vec();
         sorted_files.sort_by(|a, b| b.loc.cmp(&a.loc));
 
@@ -106,12 +127,13 @@ fn grouped_info(files: &Vec<File>, git: bool) {
             }
         }
 
-        println!("{}", table.render());
-        println!("Number of {:?} files: {} \n", key, val.len());
-        println!(
-            "Total lines of code: {}\n",
-            val.iter().map(|x| x.loc).sum::<usize>()
-        );
+        tables.push(table);
+    }
+
+    tables.insert(0, file_type_table);
+
+    for table in tables.iter() {
+        println!("{}", table.render())
     }
 }
 

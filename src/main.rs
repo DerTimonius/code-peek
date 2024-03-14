@@ -24,7 +24,7 @@ fn main() {
 
     let mut files = get_files(dir, overrides);
 
-    let total_commits = if cli.display_options.git {
+    let total_commits = if cli.display_options.git || cli.display_options.all {
         add_git_info(&mut files, dir)
     } else {
         None

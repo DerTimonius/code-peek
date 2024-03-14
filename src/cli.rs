@@ -15,6 +15,7 @@ pub struct Cli {
 pub struct DisplayOptions {
     pub group: bool,
     pub git: bool,
+    pub all: bool,
 }
 
 pub fn run_cli() -> Result<Cli> {
@@ -27,6 +28,7 @@ pub fn run_cli() -> Result<Cli> {
       .about("A CLI tool to peek into codebases and gather insights")
       .arg(arg!([directory] "Directory to search, defauls to cwd").required(false))
       .arg(arg!([num]  "Number of files to display, defauls to 10").required(false))
+      .arg(arg!([all] -a --all "Display all available information").required(false))
       .arg(arg!([group] -g --group "Group the results by its extension").required(false))
       .arg(arg!([git] -t --git "Get git info - how many commits were made to each file").required(false))
       .arg(
@@ -55,6 +57,7 @@ pub fn run_cli() -> Result<Cli> {
 
     let group = matches.get_one::<bool>("group").unwrap().to_owned();
     let git = matches.get_one::<bool>("git").unwrap().to_owned();
+    let all = matches.get_one::<bool>("all").unwrap().to_owned();
 
     let exclude = if let Some(globs) = matches.get_one::<String>("exclude") {
         globs
@@ -68,7 +71,7 @@ pub fn run_cli() -> Result<Cli> {
     let cli = Cli {
         dir: dir.to_string(),
         num,
-        display_options: DisplayOptions { group, git },
+        display_options: DisplayOptions { all, group, git },
         exclude,
     };
 
