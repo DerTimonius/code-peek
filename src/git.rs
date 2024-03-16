@@ -9,7 +9,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GitAuthor {
     pub name: String,
     pub commits: u32,
@@ -127,4 +127,40 @@ fn parse_git_commits(input: &str) -> IResult<&str, (usize, HashMap<&str, u32>)> 
     }
 
     Ok((input, (commits, file_map)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_parse_commits() {
+        let test_str = "123\n12 foo.rs\n11 bar.rs";
+
+        assert!(parse_git_commits(test_str).is_ok());
+
+        let commits: usize = 123;
+        let mut file_map: HashMap<&str, u32> = HashMap::new();
+        file_map.insert("foo.rs", 12);
+        file_map.insert("bar.rs", 11);
+        assert_eq!(parse_git_commits(test_str), Ok(("", (commits, file_map))));
+    }
+
+    #[test]
+    fn test_parse_authors() {
+        let test_str = "12 DerTimonius\n4 dependabot";
+
+        assert!(parse_git_authors(test_str).is_ok());
+
+        let authors = vec![
+            GitAuthor {
+                name: String::from("DerTimonius"),
+                commits: 12,
+            },
+            GitAuthor {
+                name: String::from("dependabot"),
+                commits: 4,
+            },
+        ];
+        assert_eq!(parse_git_authors(test_str), Ok(("", authors)));
+    }
 }

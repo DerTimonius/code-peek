@@ -19,6 +19,8 @@ pub enum FileType {
     Go,
     Markdown,
     JSON,
+    CSV,
+    SQL,
     Other,
 }
 
@@ -49,6 +51,8 @@ impl File {
             Some("css") => FileType::CSS,
             Some("html") => FileType::HTML,
             Some("go") => FileType::Go,
+            Some("csv") => FileType::CSV,
+            Some("sql") => FileType::SQL,
             _ => FileType::Other,
         }
     }
@@ -115,4 +119,22 @@ fn get_file_info(entry: &DirEntry, dir: &str) -> Option<File> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_type() {
+        let file = File {
+            name: String::from("foo.rs"),
+            path: String::from("foo.rs"),
+            loc: 12,
+            extension: OsString::from("rs"),
+            commits: None,
+        };
+
+        assert_eq!(file.get_file_type(), FileType::Rust)
+    }
 }
