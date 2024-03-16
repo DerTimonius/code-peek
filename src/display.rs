@@ -1,6 +1,10 @@
 use colored::Colorize;
 use std::collections::HashMap;
-use term_table::{row::Row, Table, TableBuilder, TableStyle};
+use term_table::{
+    row::Row,
+    table_cell::{Alignment, TableCell},
+    Table, TableBuilder, TableStyle,
+};
 
 use crate::{
     cli::DisplayOptions,
@@ -17,13 +21,17 @@ pub fn display_info(
 ) {
     println!(
         "\n{} {}\n",
-        "Summary for project".red().bold(),
-        dir.red().bold()
+        "Summary for project".bright_blue().bold(),
+        dir.bright_blue().bold()
     );
-    println!("{} {}\n", "Total number of files:".blue(), files.len());
     println!(
         "{} {}\n",
-        "Total lines of code:".blue(),
+        "Total number of files:".bright_blue(),
+        files.len()
+    );
+    println!(
+        "{} {}\n",
+        "Total lines of code:".bright_blue(),
         files.iter().map(|x| x.loc).sum::<usize>()
     );
 
@@ -44,11 +52,12 @@ pub fn display_info(
 
     if options.group || options.all {
         grouped_info(&grouped_files, options.git || options.all);
-        if options.git || options.all {
-            display_git_info(files, num, dir, total_commits.unwrap_or(0))
-        }
     } else {
         simple_info(files, num)
+    }
+
+    if options.git || options.all {
+        display_git_info(files, num, dir, total_commits.unwrap_or(0))
     }
 }
 
@@ -67,16 +76,30 @@ fn display_git_info(files: &Vec<File>, num: usize, dir: &str, total_commits: usi
         println!("-----------------------------------\n");
         println!("{}\n", "Most prolific contributors".yellow());
 
+        let mut author_table = TableBuilder::new()
+            .has_top_boarder(true)
+            .style(TableStyle::thin())
+            .build();
+        author_table.add_row(Row::new(vec![
+            TableCell::new_with_alignment(
+                "Author".to_string().yellow().bold(),
+                1,
+                Alignment::Center,
+            ),
+            TableCell::new_with_alignment(
+                "Number of commits".to_string().yellow().bold(),
+                1,
+                Alignment::Center,
+            ),
+        ]));
+
         for author in authors.iter().take(num) {
             let name = author.name.clone();
             let commits = author.commits;
 
-            println!(
-                "{} contributed with {} commits",
-                name.bright_cyan().bold(),
-                commits.to_string().bright_cyan()
-            )
+            author_table.add_row(Row::new(vec![name, commits.to_string()]));
         }
+        println!("{}", author_table.render())
     }
     println!("\n-----------------------------------\n");
     println!("{}", "Most changed files based on commits".yellow());
@@ -84,9 +107,26 @@ fn display_git_info(files: &Vec<File>, num: usize, dir: &str, total_commits: usi
     sorted_files.sort_by(|a, b| b.commits.unwrap_or(1).cmp(&a.commits.unwrap_or(1)));
 
     let largest_files = sorted_files.into_iter().take(num).collect::<Vec<_>>();
+    let mut commits_table = TableBuilder::new()
+        .has_top_boarder(true)
+        .style(TableStyle::thin())
+        .build();
+    commits_table.add_row(Row::new(vec![
+        TableCell::new_with_alignment("File".to_string().yellow().bold(), 1, Alignment::Center),
+        TableCell::new_with_alignment(
+            "Number of commits".to_string().yellow().bold(),
+            1,
+            Alignment::Center,
+        ),
+    ]));
     for file in largest_files {
-        println!("\n{}: {} commits", file.path, file.commits.unwrap_or(1));
+        commits_table.add_row(Row::new(vec![
+            file.path,
+            file.commits.unwrap_or(1).to_string(),
+        ]));
     }
+
+    println!("{}", commits_table.render())
 }
 
 fn grouped_info(grouped_files: &HashMap<FileType, Vec<File>>, git: bool) {
@@ -104,9 +144,21 @@ fn grouped_info(grouped_files: &HashMap<FileType, Vec<File>>, git: bool) {
         .style(TableStyle::thin())
         .build();
     file_type_table.add_row(Row::new(vec![
-        "File type".to_string().bright_red().bold(),
-        "Number of files".to_string().bright_red().bold(),
-        "Lines of Code".to_string().bright_red().bold(),
+        TableCell::new_with_alignment(
+            "File type".to_string().bright_red().bold(),
+            1,
+            Alignment::Center,
+        ),
+        TableCell::new_with_alignment(
+            "Number of files".to_string().bright_red().bold(),
+            1,
+            Alignment::Center,
+        ),
+        TableCell::new_with_alignment(
+            "Lines of Code".to_string().bright_red().bold(),
+            1,
+            Alignment::Center,
+        ),
     ]));
 
     let mut tables: Vec<Table> = Vec::new();
@@ -125,14 +177,37 @@ fn grouped_info(grouped_files: &HashMap<FileType, Vec<File>>, git: bool) {
             .build();
         if git {
             table.add_row(Row::new(vec![
-                key.to_string().bright_red().bold(),
-                "Lines of Code".to_string().bright_red().bold(),
-                "Associated commits".to_string().bright_red().bold(),
+                TableCell::new_with_alignment(
+                    key.to_string().bright_red().bold(),
+                    1,
+                    Alignment::Center,
+                ),
+                TableCell::new_with_alignment(
+                    "Lines of Code".to_string().bright_red().bold(),
+                    1,
+                    Alignment::Center,
+                ),
+                TableCell::new_with_alignment(
+                    "Number of associated commits"
+                        .to_string()
+                        .bright_red()
+                        .bold(),
+                    1,
+                    Alignment::Center,
+                ),
             ]));
         } else {
             table.add_row(Row::new(vec![
-                key.to_string().bright_red().bold(),
-                "Lines of Code".to_string().bright_red().bold(),
+                TableCell::new_with_alignment(
+                    key.to_string().bright_red().bold(),
+                    1,
+                    Alignment::Center,
+                ),
+                TableCell::new_with_alignment(
+                    "Lines of Code".to_string().bright_red().bold(),
+                    1,
+                    Alignment::Center,
+                ),
             ]));
         }
         let mut sorted_files: Vec<File> = val.to_vec();
@@ -171,7 +246,24 @@ fn simple_info(files: &Vec<File>, num: usize) {
     sorted_files.sort_by(|a, b| b.loc.cmp(&a.loc));
 
     let largest_files = sorted_files.into_iter().take(num).collect::<Vec<_>>();
+    let mut table = TableBuilder::new()
+        .has_top_boarder(true)
+        .style(TableStyle::thin())
+        .build();
+    table.add_row(Row::new(vec![
+        TableCell::new_with_alignment(
+            "File".to_string().bright_green().bold(),
+            1,
+            Alignment::Center,
+        ),
+        TableCell::new_with_alignment(
+            "Lines of Code".to_string().bright_green().bold(),
+            1,
+            Alignment::Center,
+        ),
+    ]));
     for file in largest_files {
-        println!("\n{}: {}", file.path, file.loc);
+        table.add_row(Row::new(vec![file.path, file.loc.to_string()]));
     }
+    println!("{}", table.render());
 }
