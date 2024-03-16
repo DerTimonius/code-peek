@@ -28,15 +28,15 @@ code-peek [FLAGS] [OPTIONS] [ARGS]
 
 ### Flags
 
--a, --all: Display all available information.
--g, --group: Group the results by file extension or programming language.
--t, --git: Get Git information (number of commits) for each file.
+- _-a, --all_: Display all available information.
+- _-g, --group_: Group the results by file extension or programming language.
+- _-t, --git_: Get Git information (number of commits) for each file.
 
 ### Options
 
--d, --directory <DIR>: Directory to search (defaults to the current working directory).
--n, --num <NUM>: Number of files to display (defaults to 10).
--e, --exclude <GLOB>: Globs to exclude files or directories other than those specified in the .gitignore file. Expects a comma-separated list (e.g., '\*.txt,\*.csv').
+- _-d, --dir_ <DIR>: Directory to search (defaults to the current working directory).
+- _-n, --num_ <NUM>: Number of files to display (defaults to 10).
+- _-e, --exclude_ <GLOB>: Globs to exclude files or directories other than those specified in the .gitignore file. Expects a comma-separated list (e.g., '\*.txt,\*.csv').
 
 ## Examples
 
