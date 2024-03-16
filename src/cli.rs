@@ -26,17 +26,17 @@ pub fn run_cli() -> Result<Cli> {
       .name("Code Peek")
       .version(crate_version!())
       .about("A CLI tool to peek into codebases and gather insights")
-      .arg(arg!([directory] "Directory to search, defauls to cwd").required(false))
-      .arg(arg!([num]  "Number of files to display, defauls to 10").required(false))
-      .arg(arg!([all] -a --all "Display all available information").required(false))
-      .arg(arg!([group] -g --group "Group the results by its extension").required(false))
-      .arg(arg!([git] -t --git "Get git info - how many commits were made to each file").required(false))
+      .arg(arg!([directory] -d --dir [DIRECTORY] "Directory to search, defauls to cwd").required(false))
+      .arg(arg!([num] -n --num [NUMBER]  "Number of files to display, defauls to 10").required(false))
       .arg(
           arg!([exclude]
-              -e --exclude [GLOB] ... "Globs to exclude other than the files in the .gitignore, expects a comma separated list. E.g. '*.txt,*.csv'"
-          )
-          .required(false),
-      )
+            -e --exclude [GLOB] ... "Globs to exclude other than the files in the .gitignore, expects a comma separated list. E.g. '*.txt,*.csv'"
+        )
+        .required(false),
+    )
+    .arg(arg!([all] -a --all "Display all available information").required(false))
+    .arg(arg!([group] -g --group "Group the results by its extension").required(false))
+    .arg(arg!([git] -t --git "Get git info - how many commits were made to each file").required(false))
       // .arg(
       //     arg!([include]
       //         -i --include [GLOB] ... "Globs to include, expects a comma separated list. E.g. '*.txt,*.csv'"
