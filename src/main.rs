@@ -17,9 +17,9 @@ fn main() {
         let glob = format!("!{glob}"); // add ! to the front to exclude the glob
         builder.add(glob.as_str()).unwrap();
     }
-    // for glob in includes.iter() {
-    //     builder.add(glob).unwrap();
-    // }
+    for glob in cli.matches.iter() {
+        builder.add(glob).unwrap();
+    }
     let overrides = builder.build().unwrap();
 
     let mut files = get_files(dir, overrides);
