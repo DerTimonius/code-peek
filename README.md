@@ -37,6 +37,7 @@ code-peek [FLAGS] [OPTIONS] [ARGS]
 - _-d, --dir_ <DIR>: Directory to search (defaults to the current working directory).
 - _-n, --num_ <NUM>: Number of files to display (defaults to 10).
 - _-e, --exclude_ <GLOB>: Globs to exclude files or directories other than those specified in the .gitignore file. Expects a comma-separated list (e.g., '\*.txt,\*.csv').
+- _-m, --match_ <GLOB>: Globs to check, expects a comma separated list. E.g. '\*.txt,\*.csv' (Only files that match the pattern will be processed)
 
 ## Examples
 
@@ -49,13 +50,19 @@ code-peek
 Display the top 20 files in the /path/to/project directory, grouped by file extension:
 
 ```sh copy
-code-peek-d /path/to/project -n 20 -g
+code-peek -d /path/to/project -n 20 -g
 ```
 
 Display all available information, excluding .txt and .csv files:
 
 ```sh copy
-code-peek -a -e '_.txt,_.csv'
+code-peek -a -e '*.txt,*.csv'
+```
+
+Display all available information, processing only _Astro_ and _Svelte_ files:
+
+```sh copy
+code-peek -a -m '*.astro,*.svelte'
 ```
 
 ## Contributing
