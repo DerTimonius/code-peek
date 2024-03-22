@@ -6,9 +6,10 @@ use clap::{arg, command, crate_version};
 #[derive(Debug)]
 pub struct Cli {
     pub dir: String,
-    pub num: usize,
-    pub exclude: Vec<String>,
     pub display_options: DisplayOptions,
+    pub exclude: Vec<String>,
+    pub matches: Vec<String>,
+    pub num: usize,
 }
 
 #[derive(Debug)]
@@ -37,12 +38,12 @@ pub fn run_cli() -> Result<Cli> {
     .arg(arg!([all] -a --all "Display all available information").required(false))
     .arg(arg!([group] -g --group "Group the results by its extension").required(false))
     .arg(arg!([git] -t --git "Get git info - how many commits were made to each file").required(false))
-      // .arg(
-      //     arg!([include]
-      //         -i --include [GLOB] ... "Globs to include, expects a comma separated list. E.g. '*.txt,*.csv'"
-      //     )
-      //     .required(false),
-      // )
+      .arg(
+          arg!([match]
+              -m --match [GLOB] ... "Globs to check, expects a comma separated list. E.g. '*.txt,*.csv' (Only files that match the pattern will be processed)"
+          )
+          .required(false),
+      )
       .get_matches();
 
     let dir = match matches.get_one::<String>("directory") {
@@ -55,11 +56,20 @@ pub fn run_cli() -> Result<Cli> {
         None => 10,
     };
 
-    let group = matches.get_one::<bool>("group").unwrap().to_owned();
-    let git = matches.get_one::<bool>("git").unwrap().to_owned();
     let all = matches.get_one::<bool>("all").unwrap().to_owned();
+    let group = all || matches.get_one::<bool>("group").unwrap().to_owned();
+    let git = all || matches.get_one::<bool>("git").unwrap().to_owned();
 
     let exclude = if let Some(globs) = matches.get_one::<String>("exclude") {
+        globs
+            .split(",")
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+    } else {
+        Vec::new()
+    };
+
+    let matches = if let Some(globs) = matches.get_one::<String>("match") {
         globs
             .split(",")
             .map(|x| x.to_string())
@@ -73,6 +83,7 @@ pub fn run_cli() -> Result<Cli> {
         num,
         display_options: DisplayOptions { all, group, git },
         exclude,
+        matches,
     };
 
     Ok(cli)
