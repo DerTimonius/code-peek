@@ -17,6 +17,7 @@ pub struct DisplayOptions {
     pub group: bool,
     pub git: bool,
     pub all: bool,
+    pub skip_lockfiles: bool,
 }
 
 pub fn run_cli() -> Result<Cli> {
@@ -37,6 +38,7 @@ pub fn run_cli() -> Result<Cli> {
     )
     .arg(arg!([all] -a --all "Display all available information").required(false))
     .arg(arg!([group] -g --group "Group the results by its extension").required(false))
+    .arg(arg!(--"skip-lockfiles" "Skips lockfiles in analysis").long("skip-lockfiles").required(false))
     .arg(arg!([git] -t --git "Get git info - how many commits were made to each file").required(false))
       .arg(
           arg!([match]
@@ -59,6 +61,10 @@ pub fn run_cli() -> Result<Cli> {
     let all = matches.get_one::<bool>("all").unwrap().to_owned();
     let group = all || matches.get_one::<bool>("group").unwrap().to_owned();
     let git = all || matches.get_one::<bool>("git").unwrap().to_owned();
+    let skip_lockfiles = matches
+        .get_one::<bool>("skip-lockfiles")
+        .unwrap()
+        .to_owned();
 
     let exclude = if let Some(globs) = matches.get_one::<String>("exclude") {
         globs
@@ -81,7 +87,12 @@ pub fn run_cli() -> Result<Cli> {
     let cli = Cli {
         dir: dir.to_string(),
         num,
-        display_options: DisplayOptions { all, group, git },
+        display_options: DisplayOptions {
+            all,
+            group,
+            git,
+            skip_lockfiles,
+        },
         exclude,
         matches,
     };

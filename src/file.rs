@@ -5,6 +5,7 @@ use std::{
 };
 
 use ignore::{DirEntry, WalkBuilder};
+use regex::Regex;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum FileType {
@@ -27,6 +28,7 @@ pub enum FileType {
     JavaScript,
     Julia,
     JupyterNotebook,
+    Lockfile,
     Lua,
     Markdown,
     Mojo,
@@ -34,8 +36,8 @@ pub enum FileType {
     Python,
     Rust,
     SQL,
-    Svelte,
     SVG,
+    Svelte,
     Swift,
     TOML,
     TypeScript,
@@ -52,16 +54,24 @@ pub struct File {
     pub path: String,
     pub loc: usize,
     pub extension: OsString,
+    pub file_type: FileType,
     pub commits: Option<usize>,
 }
 
 impl File {
-    pub fn get_file_type(&self) -> FileType {
+    pub fn add_file_type(&mut self) {
         if self.name.ends_with("svelte.ts") || self.name.ends_with("svelte.js") {
-            return FileType::Svelte;
+            self.file_type = FileType::Svelte;
+            return;
         }
 
-        match self.extension.to_str() {
+        let lockfile_regex = Regex::new("(pnpm-lock|package-lock|project.assets|packages.lock|npm-shrinkwrap|go|elm-package).(json|yaml|yml|sum)").unwrap();
+        if lockfile_regex.is_match(self.name.as_str()) {
+            self.file_type = FileType::Lockfile;
+            return;
+        }
+
+        self.file_type = match self.extension.to_str() {
             Some("js" | "cjs" | "mjs" | "jsx") => FileType::JavaScript,
             Some("ts" | "cts" | "mts" | "tsx") => FileType::TypeScript,
             Some("json" | "jsonb" | "jsonc") => FileType::JSON,
@@ -78,6 +88,7 @@ impl File {
             Some("gql" | "graphql" | "graphqls") => FileType::GraphQL,
             Some("ex" | "exs") => FileType::Elixir,
             Some("zig") => FileType::Zig,
+            Some("lock") => FileType::Lockfile,
             Some("gleam") => FileType::Gleam,
             Some("swift") => FileType::Swift,
             Some("c" | "ec" | "idc" | "pdc") => FileType::C,
@@ -115,7 +126,11 @@ impl Display for FileType {
     }
 }
 
-pub fn get_files(dir: &str, overrides: ignore::overrides::Override) -> Vec<File> {
+pub fn get_files(
+    dir: &str,
+    overrides: ignore::overrides::Override,
+    skip_lockfiles: &bool,
+) -> Vec<File> {
     let mut files: Vec<File> = Vec::new();
 
     for result in WalkBuilder::new(dir)
@@ -128,7 +143,11 @@ pub fn get_files(dir: &str, overrides: ignore::overrides::Override) -> Vec<File>
                 if entry.path().to_str().unwrap().contains(".git/") {
                     continue;
                 }
-                if let Some(file) = get_file_info(&entry, dir) {
+                if let Some(mut file) = get_file_info(&entry, dir) {
+                    file.add_file_type();
+                    if *skip_lockfiles && file.file_type == FileType::Lockfile {
+                        continue;
+                    }
                     files.push(file)
                 }
             }
@@ -162,6 +181,7 @@ fn get_file_info(entry: &DirEntry, dir: &str) -> Option<File> {
             extension,
             loc: lines,
             commits: None,
+            file_type: FileType::Other,
         });
     }
 
@@ -174,14 +194,40 @@ mod tests {
 
     #[test]
     fn file_type() {
-        let file = File {
+        let mut file = File {
             name: String::from("foo.rs"),
             path: String::from("foo.rs"),
             loc: 12,
             extension: OsString::from("rs"),
             commits: None,
+            file_type: FileType::Other,
         };
+        file.add_file_type();
 
-        assert_eq!(file.get_file_type(), FileType::Rust)
+        assert_eq!(file.file_type, FileType::Rust);
+
+        let mut file = File {
+            name: String::from("Cargo.lock"),
+            path: String::from("Cargo.lock"),
+            loc: 12,
+            extension: OsString::from("lock"),
+            commits: None,
+            file_type: FileType::Other,
+        };
+        file.add_file_type();
+
+        assert_eq!(file.file_type, FileType::Lockfile);
+
+        let mut file = File {
+            name: String::from("pnpm-lock.yaml"),
+            path: String::from("pnpm-lock.yaml"),
+            loc: 12,
+            extension: OsString::from("yaml"),
+            commits: None,
+            file_type: FileType::Other,
+        };
+        file.add_file_type();
+
+        assert_eq!(file.file_type, FileType::Lockfile)
     }
 }
