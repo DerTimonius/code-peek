@@ -38,11 +38,10 @@ pub fn display_info(
     let mut grouped_files: HashMap<FileType, Vec<File>> = HashMap::new();
 
     for file in files.iter() {
-        if let Some(x) = grouped_files.get_mut(&file.clone().get_file_type()) {
-            x.push(file.clone());
-        } else {
-            grouped_files.insert(file.clone().get_file_type(), vec![file.clone()]);
-        }
+        grouped_files
+            .entry(file.file_type)
+            .or_insert_with(|| Vec::new())
+            .push(file.to_owned());
     }
     println!(
         "{} {}\n",

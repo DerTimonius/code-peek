@@ -31,6 +31,7 @@ code-peek [FLAGS] [OPTIONS] [ARGS]
 - _-a, --all_: Display all available information.
 - _-g, --group_: Group the results by file extension or programming language.
 - _-t, --git_: Get Git information (number of commits) for each file.
+- _--skip-lockfiles_: Skips lockfiles in analysis.
 
 ### Options
 
