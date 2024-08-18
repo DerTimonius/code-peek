@@ -65,6 +65,11 @@ impl File {
             return;
         }
 
+        if self.name == "go.mod" {
+            self.file_type = FileType::Go;
+            return;
+        }
+
         let lockfile_regex = Regex::new("(pnpm-lock|package-lock|project.assets|packages.lock|npm-shrinkwrap|go|elm-package).(json|yaml|yml|sum)").unwrap();
         if lockfile_regex.is_match(self.name.as_str()) {
             self.file_type = FileType::Lockfile;
