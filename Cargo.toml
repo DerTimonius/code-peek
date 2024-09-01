@@ -9,7 +9,7 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0.86"
-clap = { version = "4.5.4", features = ["cargo"] }
+clap = { version = "4.5.16", features = ["cargo"] }
 colored = "2.1.0"
 ignore = "0.4.22"
 nom = "7.1.3"
